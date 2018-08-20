@@ -1,3 +1,6 @@
+// Extended by Jeremy Mill (JeremyMill@gmail.com) Copyright 2018
+// Original license is below
+
 // PAM module for two-factor authentication.
 //
 // Copyright 2010 Google Inc.
@@ -1028,9 +1031,18 @@ conv_error(pam_handle_t *pamh, const char* text) {
 
 static char *request_pass(pam_handle_t *pamh, int echocode,
                           PAM_CONST char *prompt) {
+  // build the new string
+  char *prompt_with_date = (char*)malloc((32 + strlen(prompt)) * sizeof(char));
+  time_t t = time(NULL);
+  struct tm tm = *localtime(&t);
+  sprintf(prompt_with_date, "%d-%d-%d %d:%d:%d\n%s", 
+    tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec, 
+    prompt);
+  const char * const_prompt_with_date = (const char *)prompt_with_date;
   // Query user for verification code
   PAM_CONST struct pam_message msg = { .msg_style = echocode,
-                                   .msg       = prompt };
+                                   //.msg       = prompt };
+                                   .msg       = const_prompt_with_date };
   PAM_CONST struct pam_message *msgs = &msg;
   struct pam_response *resp = NULL;
   int retval = converse(pamh, 1, &msgs, &resp);

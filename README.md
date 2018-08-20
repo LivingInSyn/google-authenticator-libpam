@@ -1,3 +1,6 @@
+# This Fork:
+This is a currently experimental fork to have the library output the System Time along with the TOTP prompt for use in offline systems.
+
 # Google Authenticator PAM module
 
 Example PAM module demonstrating two-factor authentication.
