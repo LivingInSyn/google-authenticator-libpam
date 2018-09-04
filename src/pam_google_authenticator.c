@@ -1034,7 +1034,7 @@ static char *request_pass(pam_handle_t *pamh, int echocode,
   // build the new string
   char *prompt_with_date = (char*)malloc((32 + strlen(prompt)) * sizeof(char));
   time_t t = time(NULL);
-  struct tm tm = *localtime(&t);
+  struct tm tm = *gmtime(&t);
   sprintf(prompt_with_date, "%d-%d-%d %d:%d:%d\n%s", 
     tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec, 
     prompt);
