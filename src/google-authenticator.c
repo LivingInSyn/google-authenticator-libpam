@@ -19,8 +19,8 @@
 #include "config.h"
 
 #include <assert.h>
-#include <errno.h>
 #include <dlfcn.h>
+#include <errno.h>
 #include <fcntl.h>
 #include <getopt.h>
 #include <pwd.h>
@@ -29,6 +29,7 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <time.h>
 #include <unistd.h>
 
 #include "base32.h"
@@ -345,6 +346,26 @@ static void displayEnrollInfo(const char *secret, const char *label,
   free(encoderURL);
 }
 
+// ask for a code. Return code, or some garbage if no number given. That's fine
+// because bad data also won't match code.
+static int ask_code(const char* msg) {
+  char line[128];
+  printf("%s ", msg);
+  fflush(stdout);
+
+  line[sizeof(line)-1] = 0;
+  if (NULL == fgets(line, sizeof line, stdin)) {
+    if (errno == 0) {
+      printf("\n");
+    } else {
+      perror("getline()");
+    }
+    exit(1);
+  }
+
+  return strtol(line, NULL, 10);
+}
+
 // ask y/n, and return 0 for no, 1 for yes.
 static int maybe(const char *msg) {
   printf("\n");
@@ -397,6 +418,7 @@ static void usage(void) {
  "google-authenticator [<options>]\n"
  " -h, --help                     Print this message\n"
  " -c, --counter-based            Set up counter-based (HOTP) verification\n"
+ " -C, --no-confirm               Don't confirm code. For non-interactive setups\n"
  " -t, --time-based               Set up time-based (TOTP) verification\n"
  " -d, --disallow-reuse           Disallow reuse of previously used TOTP tokens\n"
  " -D, --allow-reuse              Allow reuse of previously used TOTP tokens\n"
@@ -441,14 +463,16 @@ int main(int argc, char *argv[]) {
   char *label = NULL;
   char *issuer = NULL;
   int step_size = 0;
+  int confirm = 1;
   int window_size = 0;
   int emergency_codes = -1;
   int idx;
   for (;;) {
-    static const char optstring[] = "+hctdDfl:i:qQ:r:R:us:S:w:We:";
+    static const char optstring[] = "+hcCtdDfl:i:qQ:r:R:us:S:w:We:";
     static struct option options[] = {
       { "help",             0, 0, 'h' },
       { "counter-based",    0, 0, 'c' },
+      { "no-confirm",       0, 0, 'C' },
       { "time-based",       0, 0, 't' },
       { "disallow-reuse",   0, 0, 'd' },
       { "allow-reuse",      0, 0, 'D' },
@@ -489,7 +513,7 @@ int main(int argc, char *argv[]) {
       }
       exit(0);
     } else if (!idx--) {
-      // counter-based
+      // counter-based, -c
       if (mode != ASK_MODE) {
         fprintf(stderr, "Duplicate -c and/or -t option detected\n");
         _exit(1);
@@ -501,6 +525,9 @@ int main(int argc, char *argv[]) {
         _exit(1);
       }
       mode = HOTP_MODE;
+    } else if (!idx--) {
+      // don't confirm code provisioned, -C
+      confirm = 0;
     } else if (!idx--) {
       // time-based
       if (mode != ASK_MODE) {
@@ -742,7 +769,29 @@ int main(int argc, char *argv[]) {
   if (!quiet) {
     displayEnrollInfo(secret, label, use_totp, issuer);
     printf("Your new secret key is: %s\n", secret);
-    printf("Your verification code is %06d\n", generateCode(secret, 0));
+
+    // Confirm code.
+    if (confirm && use_totp) {
+      for (;;) {
+        const int test_code = ask_code("Enter code from app (-1 to skip):");
+        if (test_code < 0) {
+          printf("Code confirmation skipped\n");
+          break;
+        }
+        const unsigned long tm = time(NULL)/(step_size ? step_size : 30);
+        const int correct_code = generateCode(secret, tm);
+        if (test_code == correct_code) {
+          printf("Code confirmed\n");
+          break;
+        }
+        printf("Code incorrect (correct code %06d). Try again.\n",
+               correct_code);
+      }
+    } else {
+      const unsigned long tm = 1;
+      printf("Your verification code for code %d is %06d\n",
+             tm, generateCode(secret, tm));
+    }
     printf("Your emergency scratch codes are:\n");
   }
   free(label);
@@ -898,3 +947,9 @@ int main(int argc, char *argv[]) {
 
   return 0;
 }
+/* ---- Emacs Variables ----
+ * Local Variables:
+ * c-basic-offset: 2
+ * indent-tabs-mode: nil
+ * End:
+ */
